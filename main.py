@@ -1,77 +1,124 @@
 from data import AppleMaps, Course, EvenWeeks, Geo, OddWeeks, School, Weeks
 
 # 定位信息的设置请参考 README.md
-品学楼地图 = AppleMaps("UESTC.ics")
-立人楼A = Geo("电子科技大学清水河校区立人楼A区", 30.749454, 103.932191)
-立人楼B = Geo("电子科技大学清水河校区立人楼B区", 30.748903, 103.931567)
+# 品学楼地图 = AppleMaps("UESTC.ics")
+CHRYS = "Chrysler Center, 2121 Bonisteel Blvd, Ann Arbor, MI 48109, USA"
+DOW = "Dow Building, 2301 Bonisteel Blvd, Ann Arbor, MI 48109, USA"
+EH = "East Hall, 530 Church St, Ann Arbor, MI 48109, USA"
+FXB = "Francois-Xavier Bagnoud Building, 1320 Beal Ave, Ann Arbor, MI 48109, USA"
+GGBL = "G.G. Brown Building, 2350 Hayward St, Ann Arbor, MI 48109, USA"
+# 立人楼B = Geo("电子科技大学清水河校区立人楼B区", 30.748903, 103.931567)
 
 school = School(
-    duration=45,   # 每节课时间为 45 分钟
+    duration=30,  # 每节课时间为 30 分钟
     timetable=[
-        (8, 30),   # 上午第一节课时间为 8:30 至 9:15
-        (9, 20),
-        (10, 20),
-        (11, 10),
-        (14, 30),  # 下午第一节课时间为下午 2:30 至 3:15
-        (15, 20),
-        (16, 20),
-        (17, 10),
-        (19, 30),
-        (20, 20),
-        (21, 10),
+        (8, 00),
+        (8, 30),
+        (9, 00),
+        (9, 30),
+        (10, 00),
+        (10, 30),
+        (11, 00),
+        (11, 30),
+        (12, 00),
+        (12, 30),
+        (13, 00),
+        (13, 30),
+        (14, 00),
+        (14, 30),
+        (15, 00),
+        (15, 30),
+        (16, 00),
+        (16, 30),
+        (17, 00),
+        (17, 30),
     ],
-    start=(2024, 3, 1),  # 开学第一周当周周一至周日以内的任意日期
+    start=(2025, 8, 25),  # 开学第一周当周周一至周日以内的任意日期
     courses=[
-        # 张三老师的「新时代中国特色社会主义理论与实践」会在
-        # 第 1 至 9 周和第 11 周的的星期六第 7-8 节在 品学楼B107 教室上课
-        Course(
-            name="新时代中国特色社会主义理论与实践",
-            teacher="张三",
-            classroom="品学楼B107",
-            location=品学楼地图["品学楼B"],     # Apple Maps 实例
-            weekday=6,
-            weeks=Weeks(1, 9) + [11],        # 数字数组拼合
-            indexes=[7, 8],
-        ),
-
-        # 李四老师的「雷达与电子对抗系统」会在第 1 至 9 周的星期二第 9-11 节在 立人楼A417 教室上课
-        Course(
-            "雷达与电子对抗系统",
-            "李四",
-            "立人楼A417",
-            立人楼A,                            # Geo 实例
-            2,
-            Weeks(1, 9),
-            Weeks(9, 11),                      # 等价于 [9, 10, 11]
-        ),
-
-        # 王五老师的「最优化理论与应用」会在第 1 至 13 周
-        # 星期一第 3-4 节、星期三第 5-6 节、星期五第 9-10 节在 立人楼B417 教室上课
         *[
             Course(
-                "最优化理论与应用",
-                "王五",
-                "立人楼B417",
-                立人楼B,
+                "EECS 281 Data Structures and Algorithms [LEC]",
+                "Marcus Darden, David Paoletti, Hector Garcia-Ramirez",
+                "CHRYS 220",
+                CHRYS,
                 weekday,
-                Weeks(1, 13),
-                indexes,
+                Weeks(1, 16),
+                [6, 7, 8],
             )
-            for weekday, indexes in ((1, [3, 4]), (3, [5, 6]), (5, [9, 10]))
+            for weekday in (2, 4)
         ],
-
-        # 赵六老师的「信号检测与估计」会在第 1 至 11 的奇数周的星期四第 5-6 节在 品学楼C411 教室上课
-        Course(
-            "信号检测与估计",
-            "赵六",
-            "品学楼C411",
-            "电子科技大学清水河校区品学楼C区",      # 纯字符串地点
-            4,
-            OddWeeks(1, 11),                   # 奇数周限定
-            [5, 6],
-        )
-    ],
+        *[
+            Course(
+                "EECS 281 Data Structures and Algorithms [LAB]",
+                "",
+                "DOW 3150",
+                DOW,
+                5,
+                Weeks(1, 16),
+                [i for i in range(16, 20)],
+            )
+        ],
+        *[
+            Course(
+                "EECS 370 Intro Computer Org [LEC]",
+                "Yatin Manerkar",
+                "CHRYS 220",
+                CHRYS,
+                weekday,
+                Weeks(1, 16),
+                [15, 16, 17],
+            )
+            for weekday in (2, 4)
+        ],
+        *[
+            Course(
+                "EECS 370 Intro Computer Org [LAB]",
+                "",
+                "FXB 1008",
+                FXB,
+                1,
+                Weeks(1, 16),
+                [2, 3, 4, 5],
+            ),
+        ],
+        *[
+            Course(
+                "MECHENG 235 Thermodynamics I",
+                "Angela Violi",
+                "GGBL 1571",
+                GGBL,
+                weekday,
+                Weeks(1, 16),
+                [12, 13, 14],
+            )
+            for weekday in (2, 4)
+        ],
+        *[
+            Course(
+                "MECHENG 360 Dynamic Sys",
+                "Uduak Inyang-Udoh",
+                "CHRYS133",
+                CHRYS,
+                weekday,
+                Weeks(1, 16),
+                [2, 3, 4, 5],
+            )
+            for weekday in (2, 4)
+        ],
+        *[
+            Course(
+                "STATS 425 Intro Probability",
+                "Reynold Fregoli",
+                "EH 1068",
+                EH,
+                weekday,
+                Weeks(1, 16),
+                [13, 14],
+            )
+            for weekday in (1, 3, 5)
+        ]
+    ]
 )
 
-with open("课表.ics", "w", encoding = "utf-8") as w:
+with open("Timetable.ics", "w", encoding="utf-8") as w:
     w.write(school.generate())
