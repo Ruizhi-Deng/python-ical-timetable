@@ -44,25 +44,28 @@ class Course:
     teacher: str
     classroom: str
     location: Any
-    weekday: int
-    weeks: list[int]
-    indexes: list[int]
+    weekday: int | list[int] | None = None  # 周几，可以是单个数字或列表（两种方式通用）
+    # 方式一：使用周数和课节
+    weeks: list[int] | None = None
+    indexes: list[int] | None = None
+    # 方式二：使用具体日期和时间
+    start_date: tuple[int, int, int] | None = None  # (year, month, day)
+    end_date: tuple[int, int, int] | None = None  # (year, month, day)
+    start_time: tuple[int, int] | None = None  # (hour, minute)
+    end_time: tuple[int, int] | None = None  # (hour, minute)
     details: str = ""
 
     def title(self) -> str:
         """
-        每一次课程日历项的标题：
-        如希望传递「当前是第几周」这样的参数，可在这里预留格式化变量，并在 School.generate() 函数中修改
+        每一次课程日历项的标题
         """
         return f"{self.name}"
-        # return f"{self.code} - {self.name}"
 
     def description(self) -> str:
         """
-        每一次课程日历项目的介绍信息：
-        如希望传递「当前是第几周」这样的参数，可在这里预留格式化变量，并在 School.generate() 函数中修改
+        每一次课程日历项目的介绍信息
         """
-        return f"教师：{self.teacher}\\n{self.details}"
+        return f"Lecturer: {self.teacher}\\n{self.details}"
 
 
 @dataclass
@@ -88,16 +91,21 @@ class School:
     FOOTERS = ["END:VCALENDAR"]
 
     def __post_init__(self) -> None:
-        assert self.timetable, "请设置课程对应时间"
-        assert len(self.start) >= 3, "请设置开学第一周日期"
         assert self.courses, "请填写课程列表"
-        self.timetable.insert(0, (0, 0))
-        self.start_dt = datetime(*self.start[:3])
-        self.start_dt -= timedelta(days=self.start_dt.weekday())  # 让日期回到周一
+        # 两种方式都支持，初始化可选参数
+        if self.timetable:
+            self.timetable.insert(0, (0, 0))
+        if self.start:
+            assert len(self.start) >= 3, "请设置开学第一周日期"
+            self.start_dt = datetime(*self.start[:3])
+            self.start_dt -= timedelta(days=self.start_dt.weekday())  # 让日期回到周一
+        else:
+            self.start_dt = None
 
     def time(self, week: int, weekday: int, index: int, plus: bool = False) -> datetime:
         """
         Calculates the datetime for a specific class session based on the week, weekday, and timetable index.
+        此方法保留用于向后兼容，新方法应使用 Course 中的日期和时间。
 
         Args:
             week (int): The week number (1-based).
@@ -108,6 +116,8 @@ class School:
         Returns:
             datetime: The calculated datetime for the class session.
         """
+        if not self.start_dt or not self.timetable:
+            raise ValueError("使用旧的时间计算方式需要设置 start 和 timetable")
         date = self.start_dt + timedelta(weeks=week - 1, days=weekday - 1)
         dt = date.replace(
             hour=self.timetable[index][0], minute=self.timetable[index][1]
@@ -134,55 +144,125 @@ class School:
             else:
                 loc_lines = []
 
-            # Sort weeks and compute recurrence
-            weeks = sorted(course.weeks)
-            first_week = weeks[0]
-            # last_week = weeks[-1]
-            count = len(weeks)
-            # Determine interval
-            diffs = [weeks[i] - weeks[i - 1] for i in range(1, len(weeks))]
-            interval = diffs[0] if diffs and all(d == diffs[0] for d in diffs) else 1
-            # Map weekday
-            day_map = {1: "MO", 2: "TU", 3: "WE", 4: "TH", 5: "FR", 6: "SA", 7: "SU"}
-            byday = day_map.get(course.weekday, "MO")
-            # Build RRULE
-            rrule_parts = [f"FREQ=WEEKLY", f"BYDAY={byday}"]
-            if interval > 1:
-                rrule_parts.append(f"INTERVAL={interval}")
-            rrule_parts.append(f"COUNT={count}")
-            rrule = ";".join(rrule_parts)
+            # 判断使用哪种方式（方式一：周数+课节 vs 方式二：日期+时间）
+            if course.start_date and course.start_time and course.end_time:
+                # 方式二：具体日期和时间
+                start_date = datetime(*course.start_date)
+                start_time = datetime.combine(start_date.date(), datetime.min.time()).replace(
+                    hour=course.start_time[0], minute=course.start_time[1]
+                )
+                end_time = datetime.combine(start_date.date(), datetime.min.time()).replace(
+                    hour=course.end_time[0], minute=course.end_time[1]
+                )
+                dtstart = start_time
+                dtend = end_time
 
-            # DTSTART and DTEND based on first occurrence
-            dtstart = self.time(first_week, course.weekday, course.indexes[0])
-            dtend = self.time(first_week, course.weekday, course.indexes[-1], True)
+                # 计算重复规则
+                if course.end_date and course.weekday:
+                    end_date = datetime(*course.end_date)
+                    day_map = {1: "MO", 2: "TU", 3: "WE", 4: "TH", 5: "FR", 6: "SA", 7: "SU"}
+                    weekdays = course.weekday if isinstance(course.weekday, list) else [course.weekday]
+                    byday = ",".join([day_map.get(d, "MO") for d in sorted(weekdays)])
+                    rrule = f"FREQ=WEEKLY;BYDAY={byday};UNTIL={end_date:%Y%m%d}"
+                elif course.weekday:
+                    day_map = {1: "MO", 2: "TU", 3: "WE", 4: "TH", 5: "FR", 6: "SA", 7: "SU"}
+                    weekdays = course.weekday if isinstance(course.weekday, list) else [course.weekday]
+                    byday = ",".join([day_map.get(d, "MO") for d in sorted(weekdays)])
+                    end_date = start_date + timedelta(days=365)
+                    rrule = f"FREQ=WEEKLY;BYDAY={byday};UNTIL={end_date:%Y%m%d}"
+                else:
+                    rrule = None
 
-            # UID per course
-            uid_input = (
-                f"{course.title()}-{first_week}-{course.weekday}-{course.indexes[0]}"
-            )
-            uid = md5(uid_input.encode()).hexdigest()
+                uid_input = f"{course.title()}-{course.classroom}-{course.start_date}-{course.start_time}"
+                uid = md5(uid_input.encode()).hexdigest()
 
-            # Build VEVENT
-            vevent = [
-                "BEGIN:VEVENT",
-                f"SUMMARY:{course.title()}",
-                f"DESCRIPTION:{course.description()}",
-                f"DTSTART;TZID=America/Detroit:{dtstart:%Y%m%dT%H%M%S}",
-                f"DTEND;TZID=America/Detroit:{dtend:%Y%m%dT%H%M%S}",
-                f"RRULE:{rrule}",
-                f"DTSTAMP:{runtime:%Y%m%dT%H%M%SZ}",
-                f"UID:{uid}",
-                *loc_lines,
-                "END:VEVENT",
-            ]
-            # Fold lines at 75 chars as per RFC2445
-            for line in vevent:
-                first = True
-                while line:
-                    prefix = "" if first else " "
-                    lines.append(prefix + line[:72])
-                    line = line[72:]
-                    first = False
+                # Build VEVENT
+                vevent = [
+                    "BEGIN:VEVENT",
+                    f"SUMMARY:{course.title()}",
+                    f"DESCRIPTION:{course.description()}",
+                    f"DTSTART;TZID=America/Detroit:{dtstart:%Y%m%dT%H%M%S}",
+                    f"DTEND;TZID=America/Detroit:{dtend:%Y%m%dT%H%M%S}",
+                ]
+                
+                if rrule:
+                    vevent.append(f"RRULE:{rrule}")
+                
+                vevent.extend([
+                    f"DTSTAMP:{runtime:%Y%m%dT%H%M%SZ}",
+                    f"UID:{uid}",
+                    *loc_lines,
+                    "END:VEVENT",
+                ])
+                
+                # Fold lines at 75 chars as per RFC2445
+                for line in vevent:
+                    first = True
+                    while line:
+                        prefix = "" if first else " "
+                        lines.append(prefix + line[:72])
+                        line = line[72:]
+                        first = False
+
+            elif course.weekday is not None and course.weeks and course.indexes:
+                # 方式一：周数 + 课节
+                if not self.start_dt or not self.timetable:
+                    raise ValueError("使用方式一（周数+课节）需要设置 start 和 timetable")
+                
+                # 处理 weekday 可以是单个值或列表
+                weekdays = course.weekday if isinstance(course.weekday, list) else [course.weekday]
+                
+                for wd in weekdays:
+                    weeks = sorted(course.weeks)
+                    first_week = weeks[0]
+                    count = len(weeks)
+                    diffs = [weeks[i] - weeks[i - 1] for i in range(1, len(weeks))]
+                    interval = diffs[0] if diffs and all(d == diffs[0] for d in diffs) else 1
+                    day_map = {1: "MO", 2: "TU", 3: "WE", 4: "TH", 5: "FR", 6: "SA", 7: "SU"}
+                    byday = day_map.get(wd, "MO")
+                    
+                    rrule_parts = [f"FREQ=WEEKLY", f"BYDAY={byday}"]
+                    if interval > 1:
+                        rrule_parts.append(f"INTERVAL={interval}")
+                    rrule_parts.append(f"COUNT={count}")
+                    rrule = ";".join(rrule_parts)
+
+                    dtstart = self.time(first_week, wd, course.indexes[0])
+                    dtend = self.time(first_week, wd, course.indexes[-1], True)
+
+                    uid_input = (
+                        f"{course.title()}-{first_week}-{wd}-{course.indexes[0]}"
+                    )
+                    uid = md5(uid_input.encode()).hexdigest()
+                    
+                    # Build VEVENT
+                    vevent = [
+                        "BEGIN:VEVENT",
+                        f"SUMMARY:{course.title()}",
+                        f"DESCRIPTION:{course.description()}",
+                        f"DTSTART;TZID=America/Detroit:{dtstart:%Y%m%dT%H%M%S}",
+                        f"DTEND;TZID=America/Detroit:{dtend:%Y%m%dT%H%M%S}",
+                        f"RRULE:{rrule}",
+                        f"DTSTAMP:{runtime:%Y%m%dT%H%M%SZ}",
+                        f"UID:{uid}",
+                        *loc_lines,
+                        "END:VEVENT",
+                    ]
+                    
+                    # Fold lines at 75 chars as per RFC2445
+                    for line in vevent:
+                        first = True
+                        while line:
+                            prefix = "" if first else " "
+                            lines.append(prefix + line[:72])
+                            line = line[72:]
+                            first = False
+            else:
+                raise ValueError(
+                    f"课程 '{course.name}' 定义不完整。需要使用以下方式之一:\n"
+                    "方式一：weekday, weeks, indexes\n"
+                    "方式二：start_date, start_time, end_time"
+                )
 
         # Append footer
         lines.extend(self.FOOTERS)
